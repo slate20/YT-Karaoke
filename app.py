@@ -6,6 +6,9 @@ import undetected_chromedriver as uc
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 from googleapiclient.discovery import build
 import threading
@@ -43,13 +46,177 @@ def initialize_player():
     player_window.get('http://localhost:5000/player')
     player_running = True
 
-# Player control thread - no longer automatically plays songs
+# Player control thread - handles ad skipping, popup dismissal, and keeps player alive
 def player_control_thread():
     global player_window, player_running
     
-    # This thread now just keeps the player window alive
     while player_running:
+        try:
+            # 1. Check for skip ad button and click it if available
+            handle_skip_ad_button()
+            
+            # 2. Check for "No thanks" popup and dismiss it
+            handle_no_thanks_popup()
+            
+        except Exception as e:
+            # Ignore any errors that might occur during button handling
+            pass
+            
+        # Sleep briefly before checking again
         time.sleep(1)
+
+# Function to handle skip ad buttons
+def handle_skip_ad_button():
+    if not player_window:
+        return
+        
+    # Using the exact selector found in the YouTube player
+    skip_button_selectors = [
+        ".ytp-skip-ad-button",                  # Exact class from inspection
+        "#skip-button\\:i",                     # Exact ID from inspection (escaped colon)
+        ".ytp-ad-skip-button-container button",  # Fallback: container button
+        "button[aria-label*='Skip']",           # Fallback: any button with 'Skip' in aria-label
+        "button.ytp-ad-skip-button-modern"       # Fallback: modern skip button
+    ]
+    
+    for selector in skip_button_selectors:
+        try:
+            # Wait for skip button with a short timeout
+            skip_button = WebDriverWait(player_window, 0.5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+            )
+            
+            # Try multiple methods to click the button
+            try:
+                # Method 1: Standard Selenium click
+                skip_button.click()
+                print("Skipped ad using Selenium click")
+            except:
+                try:
+                    # Method 2: JavaScript click (more reliable in some cases)
+                    player_window.execute_script("arguments[0].click();", skip_button)
+                    print("Skipped ad using JavaScript click")
+                except:
+                    # Method 3: Direct JavaScript execution to find and click skip button
+                    player_window.execute_script("""
+                        const skipButtons = [
+                            document.querySelector('.ytp-skip-ad-button'),
+                            document.querySelector('#skip-button\\:i'),
+                            document.querySelector('.ytp-ad-skip-button-container button'),
+                            Array.from(document.querySelectorAll('button')).find(el => el.textContent.includes('Skip'))
+                        ];
+                        
+                        for (const btn of skipButtons) {
+                            if (btn) {
+                                btn.click();
+                                console.log('Skipped ad via direct JavaScript');
+                                break;
+                            }
+                        }
+                    """)
+                    print("Attempted to skip ad using direct JavaScript")
+            
+            # Exit the loop if we found a button to click
+            break
+        except:
+            # Button not found or not clickable yet, continue to next selector
+            pass
+
+# Function to handle "No thanks" popups
+def handle_no_thanks_popup():
+    if not player_window:
+        return
+        
+    # Selectors for "No thanks" buttons
+    no_thanks_selectors = [
+        # Exact selector from the provided HTML
+        ".yt-spec-button-shape-next--text span[role='text']:contains('No thanks')",
+        "button.yt-spec-button-shape-next:contains('No thanks')",
+        # More general selectors
+        "button:contains('No thanks')",
+        "a:contains('No thanks')",
+        "[aria-label='No thanks']",
+        # Try to find by text content
+        "//button[contains(text(), 'No thanks')]",  # XPath
+        "//span[contains(text(), 'No thanks')]/ancestor::button"  # XPath for nested text
+    ]
+    
+    # Try CSS selectors first
+    for selector in no_thanks_selectors[:5]:  # First 5 are CSS selectors
+        try:
+            no_thanks_button = WebDriverWait(player_window, 0.5).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+            )
+            
+            # Try to click it
+            try:
+                no_thanks_button.click()
+                print("Dismissed 'No thanks' popup using Selenium click")
+                return
+            except:
+                try:
+                    player_window.execute_script("arguments[0].click();", no_thanks_button)
+                    print("Dismissed 'No thanks' popup using JavaScript click")
+                    return
+                except:
+                    pass
+        except:
+            pass
+    
+    # Try XPath selectors
+    for selector in no_thanks_selectors[5:]:  # Last 2 are XPath
+        try:
+            no_thanks_button = WebDriverWait(player_window, 0.5).until(
+                EC.element_to_be_clickable((By.XPATH, selector))
+            )
+            
+            try:
+                no_thanks_button.click()
+                print("Dismissed 'No thanks' popup using Selenium click (XPath)")
+                return
+            except:
+                try:
+                    player_window.execute_script("arguments[0].click();", no_thanks_button)
+                    print("Dismissed 'No thanks' popup using JavaScript click (XPath)")
+                    return
+                except:
+                    pass
+        except:
+            pass
+    
+    # Direct JavaScript approach as a last resort
+    try:
+        player_window.execute_script("""
+            // Try to find and click any "No thanks" button
+            const findAndClickNoThanksButton = () => {
+                // Method 1: Find by text content
+                const allButtons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+                const noThanksButton = allButtons.find(el => {
+                    const text = el.textContent.toLowerCase().trim();
+                    return text === 'no thanks' || text === 'no, thanks';
+                });
+                
+                if (noThanksButton) {
+                    noThanksButton.click();
+                    console.log('Clicked No thanks button via JavaScript text search');
+                    return true;
+                }
+                
+                // Method 2: Find by aria-label
+                const ariaButton = document.querySelector('[aria-label="No thanks"]');
+                if (ariaButton) {
+                    ariaButton.click();
+                    console.log('Clicked No thanks button via aria-label');
+                    return true;
+                }
+                
+                return false;
+            };
+            
+            return findAndClickNoThanksButton();
+        """)
+    except:
+        pass
 
 # Routes
 @app.route('/')
@@ -185,11 +352,27 @@ def start_player():
 
 @app.route('/api/player/stop', methods=['POST'])
 def stop_player():
-    global player_running
+    global player_running, player_window, player_thread
     
     player_running = False
+    
+    # Close the browser window if it exists
     if player_window:
-        player_window.quit()
+        try:
+            player_window.quit()
+        except:
+            pass  # Ignore errors if browser already closed
+        finally:
+            # Reset the player_window variable so we can create a new one later
+            player_window = None
+    
+    # Reset the thread variable
+    if player_thread and player_thread.is_alive():
+        try:
+            player_thread.join(timeout=1)  # Wait for thread to finish with timeout
+        except:
+            pass
+    player_thread = None
     
     return jsonify({'success': True})
 
