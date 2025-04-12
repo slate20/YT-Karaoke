@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Karaoke Player{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #000;
+    }
+    .player-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .waiting-message {
+        text-align: center;
+        color: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="player-container">
+    <div class="waiting-message">
+        <h2>Karaoke Player Ready</h2>
+        <p>Waiting for songs to be added to the queue...</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// This page is intentionally minimal as it will be controlled by Selenium
+// The actual YouTube video will be loaded directly via Selenium
+{% endblock %}

@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}YouTube Karaoke{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #121212;
+            color: #f8f9fa;
+        }
+        .card {
+            background-color: #1e1e1e;
+            border: 1px solid #333;
+        }
+        .list-group-item {
+            background-color: #1e1e1e;
+            color: #f8f9fa;
+            border-color: #333;
+        }
+        .form-control, .form-select {
+            background-color: #2d2d2d;
+            color: #f8f9fa;
+            border-color: #444;
+        }
+        .form-control:focus, .form-select:focus {
+            background-color: #2d2d2d;
+            color: #f8f9fa;
+        }
+        /* Make placeholder text more readable with lighter color */
+        .form-control::placeholder, .form-select::placeholder {
+            color: #adb5bd;
+            opacity: 1;
+        }
+        .video-tile {
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .video-tile:hover {
+            transform: scale(1.03);
+        }
+        .singer-badge {
+            font-size: 0.8rem;
+            margin-right: 5px;
+        }
+        .queue-item {
+            position: relative;
+        }
+        .queue-controls {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+        }
+        .current-song {
+            background-color: #0d6efd20;
+        }
+        /* Make muted text more readable but still muted */
+        .text-muted {
+            color: #9fa6ad !important;
+        }
+        
+        /* Mixing Console Styles */
+        .mixing-console {
+            background-color: #2a2a2a;
+            border-radius: 8px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .console-section {
+            background-color: #333;
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            border: 1px solid #444;
+        }
+        
+        .console-label {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #aaa;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+        }
+        
+        .console-button-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* Base button style */
+        .console-button {
+            width: 60px;
+            height: 60px;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 8px;
+            font-size: 1.2rem;
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease;
+        }
+        
+        /* Power buttons remain circular */
+        .power-on, .power-off {
+            border-radius: 50%;
+        }
+        
+        /* Playback buttons are rectangular with rounded corners */
+        .transport, .display {
+            border-radius: 10px;
+            width: 70px;
+            height: 50px;
+        }
+        
+        .console-button:active:not(:disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        .console-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .console-button-label {
+            font-size: 0.7rem;
+            color: #ccc;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Button Types */
+        .power-on {
+            background: linear-gradient(145deg, #28a745, #218838);
+            color: white;
+        }
+        
+        .power-off {
+            background: linear-gradient(145deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .transport {
+            background: linear-gradient(145deg, #007bff, #0069d9);
+            color: white;
+        }
+        
+        .display {
+            background: linear-gradient(145deg, #6c757d, #5a6268);
+            color: white;
+        }
+        
+        /* Modal Dark Theme */
+        .modal-content {
+            background-color: #1e1e1e;
+            color: #f8f9fa;
+            border: 1px solid #333;
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid #333;
+        }
+        
+        .modal-footer {
+            border-top: 1px solid #333;
+        }
+        
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+        }
+        
+        .singer-select-item {
+            background-color: #2d2d2d;
+            color: #f8f9fa;
+            border-color: #444;
+            transition: all 0.2s ease;
+        }
+        
+        .singer-select-item:hover {
+            background-color: #3d3d3d;
+            color: #ffffff;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+        
+        {% block scripts %}{% endblock %}
+    </script>
+</body>
+</html>

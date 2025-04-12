@@ -1,0 +1,575 @@
+{% extends "base.html" %}
+
+{% block title %}Karaoke Control Panel{% endblock %}
+
+{% block content %}
+<div class="row mt-3">
+    <div class="col-12">
+        <h1 class="text-center mb-4">
+            <i class="fas fa-microphone-alt me-2"></i>YouTube Karaoke
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Singer Management -->
+    <div class="col-md-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Singers</h5>
+            </div>
+            <div class="card-body">
+                <form id="add-singer-form" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="singer-name" class="form-control" placeholder="Add singer...">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </form>
+                <div id="singers-list" class="list-group">
+                    <!-- Singers will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Controls - Mixing Console Style -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Player Controls</h5>
+            </div>
+            <div class="card-body mixing-console p-4">
+                <!-- Power Section -->
+                <div class="console-section mb-4">
+                    <div class="console-label text-center mb-2">POWER</div>
+                    <div class="d-flex justify-content-around">
+                        <div class="console-button-container">
+                            <button id="start-player" class="console-button power-on">
+                                <i class="fas fa-power-off"></i>
+                            </button>
+                            <div class="console-button-label">ON</div>
+                        </div>
+                        <div class="console-button-container">
+                            <button id="stop-player" class="console-button power-off" disabled>
+                                <i class="fas fa-power-off"></i>
+                            </button>
+                            <div class="console-button-label">OFF</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Player Section (Combined Transport and Display) -->
+                <div class="console-section">
+                    <div class="console-label text-center mb-2">PLAYBACK</div>
+                    <div class="d-flex justify-content-around">
+                        <div class="console-button-container">
+                            <button id="next-song" class="console-button transport" disabled>
+                                <i class="fas fa-step-forward"></i>
+                            </button>
+                            <div class="console-button-label">LOAD</div>
+                        </div>
+                        <div class="console-button-container">
+                            <button id="play-pause" class="console-button transport" disabled>
+                                <i class="fas fa-play me-1"></i><i class="fas fa-pause"></i>
+                            </button>
+                            <div class="console-button-label">PLAY/PAUSE</div>
+                        </div>
+                        <div class="console-button-container">
+                            <button id="toggle-fullscreen" class="console-button display" disabled>
+                                <i class="fas fa-expand"></i>
+                            </button>
+                            <div class="console-button-label">FULLSCREEN</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Song Queue -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Song Queue</h5>
+            </div>
+            <div class="card-body">
+                <div id="current-song-container" class="mb-3 d-none">
+                    <h6 class="text-center mb-2">Now Playing</h6>
+                    <div id="current-song" class="card p-2 current-song">
+                        <!-- Current song will be displayed here -->
+                    </div>
+                </div>
+                <h6 class="text-center mb-2">Up Next</h6>
+                <div id="queue-list" class="list-group">
+                    <!-- Queue items will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Song Search -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-search me-2"></i>Search Songs</h5>
+            </div>
+            <div class="card-body">
+                <form id="search-form" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="search-query" class="form-control" placeholder="Search for karaoke songs...">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </form>
+                <div id="search-results" class="row row-cols-1 row-cols-md-2 g-3">
+                    <!-- Search results will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Singer Management
+function loadSingers() {
+    fetch('/api/singers')
+        .then(response => response.json())
+        .then(data => {
+            updateSingersList(data.singers);
+        });
+}
+
+function updateSingersList(singers) {
+    const singersList = document.getElementById('singers-list');
+    singersList.innerHTML = '';
+    
+    if (singers.length === 0) {
+        singersList.innerHTML = '<div class="list-group-item text-center text-muted">No singers added</div>';
+        return;
+    }
+    
+    singers.forEach(singer => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span>${singer}</span>
+            <button class="btn btn-sm btn-danger remove-singer" data-singer="${singer}">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        singersList.appendChild(item);
+    });
+    
+    // Add event listeners to remove buttons
+    document.querySelectorAll('.remove-singer').forEach(button => {
+        button.addEventListener('click', function() {
+            const singer = this.getAttribute('data-singer');
+            removeSinger(singer);
+        });
+    });
+}
+
+function addSinger(name) {
+    fetch('/api/singers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name: name })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('singer-name').value = '';
+            } else {
+                alert(data.message);
+            }
+        });
+}
+
+function removeSinger(name) {
+    fetch('/api/singers', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name: name })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.message);
+            }
+        });
+}
+
+// Queue Management
+function loadQueue() {
+    fetch('/api/queue')
+        .then(response => response.json())
+        .then(data => {
+            updateQueueList(data.queue);
+        });
+}
+
+function updateQueueList(queue) {
+    const queueList = document.getElementById('queue-list');
+    queueList.innerHTML = '';
+    
+    if (queue.length === 0) {
+        queueList.innerHTML = '<div class="list-group-item text-center text-muted">Queue is empty</div>';
+        return;
+    }
+    
+    queue.forEach((song, index) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item queue-item';
+        item.innerHTML = `
+            <div class="d-flex align-items-start">
+                <img src="${song.thumbnail}" alt="${song.title}" class="me-2" style="width: 60px;">
+                <div>
+                    <h6 class="mb-1">${song.title}</h6>
+                    <span class="badge bg-primary singer-badge">${song.singer}</span>
+                    <small class="text-muted">${formatDuration(song.duration)}</small>
+                </div>
+            </div>
+            <div class="queue-controls">
+                <button class="btn btn-sm btn-danger remove-queue-item" data-index="${index}">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        queueList.appendChild(item);
+    });
+    
+    // Add event listeners to remove buttons
+    document.querySelectorAll('.remove-queue-item').forEach(button => {
+        button.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            removeQueueItem(index);
+        });
+    });
+}
+
+function updateCurrentSong(song) {
+    const currentSongContainer = document.getElementById('current-song-container');
+    const currentSong = document.getElementById('current-song');
+    
+    if (song) {
+        currentSongContainer.classList.remove('d-none');
+        currentSong.innerHTML = `
+            <div class="d-flex align-items-start">
+                <img src="${song.thumbnail}" alt="${song.title}" class="me-2" style="width: 60px;">
+                <div>
+                    <h6 class="mb-1">${song.title}</h6>
+                    <span class="badge bg-primary singer-badge">${song.singer}</span>
+                    <small class="text-muted">${formatDuration(song.duration)}</small>
+                </div>
+            </div>
+        `;
+        
+        // Enable next song button
+        document.getElementById('next-song').disabled = false;
+    } else {
+        currentSongContainer.classList.add('d-none');
+        currentSong.innerHTML = '';
+        
+        // Disable next song button
+        document.getElementById('next-song').disabled = true;
+    }
+}
+
+function removeQueueItem(index) {
+    fetch('/api/queue', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ index: index })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.message);
+            }
+        });
+}
+
+function showSingerSelectionModal(videoId, videoTitle, videoThumbnail, videoDuration) {
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('singer-selection-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'singer-selection-modal';
+        modal.className = 'modal fade';
+        modal.setAttribute('tabindex', '-1');
+        modal.setAttribute('aria-hidden', 'true');
+        
+        modal.innerHTML = `
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Select a singer:</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="song-info d-flex align-items-start mb-3">
+                            <img id="modal-song-thumbnail" src="" class="me-2" style="width: 60px;">
+                            <div>
+                                <h6 id="modal-song-title" class="mb-1"></h6>
+                                <small id="modal-song-duration" class="text-muted"></small>
+                            </div>
+                        </div>
+                        <div id="modal-singers-list" class="list-group">
+                            <!-- Singers will be added dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    // Update modal content
+    document.getElementById('modal-song-title').textContent = videoTitle;
+    document.getElementById('modal-song-thumbnail').src = videoThumbnail;
+    document.getElementById('modal-song-duration').textContent = formatDuration(videoDuration);
+    
+    // Populate singers list
+    const singersList = document.getElementById('modal-singers-list');
+    singersList.innerHTML = '';
+    
+    fetch('/api/singers')
+        .then(response => response.json())
+        .then(data => {
+            if (data.singers.length === 0) {
+                singersList.innerHTML = '<div class="list-group-item text-center text-muted">No singers added</div>';
+                return;
+            }
+            
+            data.singers.forEach(singer => {
+                const item = document.createElement('button');
+                item.className = 'list-group-item list-group-item-action singer-select-item';
+                item.textContent = singer;
+                item.addEventListener('click', function() {
+                    addToQueue(videoId, videoTitle, videoThumbnail, videoDuration, singer);
+                    const bsModal = bootstrap.Modal.getInstance(modal);
+                    bsModal.hide();
+                });
+                singersList.appendChild(item);
+            });
+        });
+    
+    // Show the modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+function addToQueue(videoId, videoTitle, videoThumbnail, videoDuration, singer) {
+    const song = {
+        title: videoTitle,
+        singer: singer,
+        video_id: videoId,
+        thumbnail: videoThumbnail,
+        duration: videoDuration
+    };
+    
+    fetch('/api/queue', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(song)
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert(data.message);
+            }
+        });
+}
+
+// Search
+function searchVideos(query) {
+    const searchResults = document.getElementById('search-results');
+    searchResults.innerHTML = '<div class="col-12 text-center"><div class="spinner-border" role="status"></div></div>';
+    
+    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            searchResults.innerHTML = '';
+            
+            if (!data.items || data.items.length === 0) {
+                searchResults.innerHTML = '<div class="col-12 text-center text-muted">No results found</div>';
+                return;
+            }
+            
+            data.items.forEach(video => {
+                const col = document.createElement('div');
+                col.className = 'col';
+                col.innerHTML = `
+                    <div class="card h-100 video-tile">
+                        <img src="${video.snippet.thumbnails.medium.url}" class="card-img-top" alt="${video.snippet.title}">
+                        <div class="card-body">
+                            <h6 class="card-title">${video.snippet.title}</h6>
+                            <p class="card-text small text-muted">${video.snippet.channelTitle}</p>
+                            <p class="card-text small text-muted">${formatDuration(video.duration)}</p>
+                            <div class="d-flex justify-content-end mt-2">
+                                <button class="btn btn-sm btn-primary add-to-queue" data-video-id="${video.id.videoId}" data-video-title="${video.snippet.title}" data-video-thumbnail="${video.snippet.thumbnails.default.url}" data-video-duration="${video.duration}">
+                                    <i class="fas fa-plus me-1"></i> Add
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                searchResults.appendChild(col);
+                
+                // Populate singer select
+                const singerSelect = document.getElementById(`singer-select-${video.id.videoId}`);
+                fetch('/api/singers')
+                    .then(response => response.json())
+                    .then(data => {
+                        data.singers.forEach(singer => {
+                            const option = document.createElement('option');
+                            option.value = singer;
+                            option.textContent = singer;
+                            singerSelect.appendChild(option);
+                        });
+                    });
+            });
+            
+            // Add event listeners to add buttons
+            document.querySelectorAll('.add-to-queue').forEach(button => {
+                button.addEventListener('click', function() {
+                    const videoId = this.getAttribute('data-video-id');
+                    const videoTitle = this.getAttribute('data-video-title');
+                    const videoThumbnail = this.getAttribute('data-video-thumbnail');
+                    const videoDuration = this.getAttribute('data-video-duration');
+                    
+                    // Show singer selection modal
+                    showSingerSelectionModal(videoId, videoTitle, videoThumbnail, videoDuration);
+                });
+            });
+        });
+}
+
+// Player Controls
+function startPlayer() {
+    fetch('/api/player/start', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('start-player').disabled = true;
+                document.getElementById('stop-player').disabled = false;
+                document.getElementById('next-song').disabled = false;
+                document.getElementById('play-pause').disabled = false;
+                document.getElementById('toggle-fullscreen').disabled = false;
+            }
+        });
+}
+
+function stopPlayer() {
+    fetch('/api/player/stop', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('start-player').disabled = false;
+                document.getElementById('stop-player').disabled = true;
+                document.getElementById('next-song').disabled = true;
+                document.getElementById('play-pause').disabled = true;
+                document.getElementById('toggle-fullscreen').disabled = true;
+            }
+        });
+}
+
+function nextSong() {
+    fetch('/api/player/next', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // The current song update will come from the server
+            }
+        });
+}
+
+function playPause() {
+    fetch('/api/player/play_pause', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            // No UI updates needed for play/pause
+        });
+}
+
+function toggleFullscreen() {
+    fetch('/api/player/toggle_fullscreen', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            // No UI updates needed for fullscreen toggle
+        });
+}
+
+// Utility Functions
+function formatDuration(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+// Socket.io Event Handlers
+socket.on('singers_update', function(data) {
+    updateSingersList(data.singers);
+});
+
+socket.on('queue_update', function(data) {
+    updateQueueList(data.queue);
+});
+
+socket.on('current_song_update', function(data) {
+    updateCurrentSong(data.current_song);
+});
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial data
+    loadSingers();
+    loadQueue();
+    
+    // Add singer form
+    document.getElementById('add-singer-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('singer-name').value.trim();
+        if (name) {
+            addSinger(name);
+        }
+    });
+    
+    // Search form
+    document.getElementById('search-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const query = document.getElementById('search-query').value.trim();
+        if (query) {
+            searchVideos(query);
+        }
+    });
+    
+    // Player control buttons
+    document.getElementById('start-player').addEventListener('click', startPlayer);
+    document.getElementById('stop-player').addEventListener('click', stopPlayer);
+    document.getElementById('next-song').addEventListener('click', nextSong);
+    document.getElementById('play-pause').addEventListener('click', playPause);
+    document.getElementById('toggle-fullscreen').addEventListener('click', toggleFullscreen);
+});
+{% endblock %}
