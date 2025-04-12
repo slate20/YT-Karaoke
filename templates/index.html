@@ -458,6 +458,12 @@ function searchVideos(query) {
 
 // Player Controls
 function startPlayer() {
+    // Show display selection modal instead of directly starting the player
+    showDisplaySelectionModal();
+}
+
+// This function is called when a display is selected from the modal
+function startPlayerWithoutDisplaySelection() {
     fetch('/api/player/start', {
         method: 'POST'
     })

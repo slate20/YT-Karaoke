@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from googleapiclient.discovery import build
 import threading
 import time
+from screeninfo import get_monitors
 
 # Load environment variables
 load_dotenv()
@@ -33,18 +34,46 @@ current_song = None
 player_window = None
 player_thread = None
 player_running = False
+selected_display = None
 
 # Initialize the player browser
 def initialize_player():
-    global player_window, player_running
+    global player_window, player_running, selected_display
     
     options = webdriver.ChromeOptions()
-    options.add_argument("--start-maximized")
     
-    # Create the undetected Chrome driver
-    player_window = uc.Chrome(options=options)
-    player_window.get('http://localhost:5000/player')
-    player_running = True
+    # Add fullscreen argument directly to Chrome options
+    options.add_argument("--start-fullscreen")
+    
+    # Set initial window position before browser opens if display is selected
+    if selected_display is not None:
+        try:
+            # Set window position via Chrome options
+            options.add_argument(f"--window-position={selected_display['x']},{selected_display['y']}")
+            
+            # Create the undetected Chrome driver with positioned options
+            player_window = uc.Chrome(options=options)
+            
+            # Load the player page
+            player_window.get('http://localhost:5000/player')
+            player_running = True
+            
+            # Additional method to ensure fullscreen if the argument doesn't work
+            # This uses JavaScript to request fullscreen mode
+            time.sleep(2)  # Wait for page to load
+            player_window.execute_script("document.documentElement.requestFullscreen();")
+            
+        except Exception as e:
+            print(f"Error positioning window: {e}")
+            # Fall back to default behavior
+            player_window = uc.Chrome(options=webdriver.ChromeOptions().add_argument("--start-fullscreen"))
+            player_window.get('http://localhost:5000/player')
+            player_running = True
+    else:
+        # Default behavior if no display selected
+        player_window = uc.Chrome(options=options)
+        player_window.get('http://localhost:5000/player')
+        player_running = True
 
 # Player control thread - handles ad skipping, popup dismissal, and keeps player alive
 def player_control_thread():
@@ -337,7 +366,24 @@ def manage_queue():
 # Player controls
 @app.route('/api/player/start', methods=['POST'])
 def start_player():
-    global player_thread, player_running
+    global player_thread, player_running, selected_display
+    
+    # Get display selection from request if available
+    data = request.json
+    if data and 'display_id' in data:
+        display_id = data.get('display_id')
+        monitors = get_monitors()
+        
+        # Find the selected display
+        for i, monitor in enumerate(monitors):
+            if i == int(display_id):
+                selected_display = {
+                    'x': monitor.x,
+                    'y': monitor.y,
+                    'width': monitor.width,
+                    'height': monitor.height
+                }
+                break
     
     if player_window is None:
         initialize_player()
@@ -352,7 +398,7 @@ def start_player():
 
 @app.route('/api/player/stop', methods=['POST'])
 def stop_player():
-    global player_running, player_window, player_thread
+    global player_running, player_window, player_thread, selected_display
     
     player_running = False
     
@@ -373,6 +419,9 @@ def stop_player():
         except:
             pass
     player_thread = None
+    
+    # Reset the selected display
+    selected_display = None
     
     return jsonify({'success': True})
 
@@ -415,6 +464,34 @@ def toggle_fullscreen():
         actions.perform()
     
     return jsonify({'success': True})
+
+# API endpoint to get display information
+@app.route('/api/displays', methods=['GET'])
+def get_displays():
+    try:
+        monitors = get_monitors()
+        displays = []
+        
+        for i, monitor in enumerate(monitors):
+            displays.append({
+                'id': i,
+                'name': f"Display {i+1}",
+                'width': monitor.width,
+                'height': monitor.height,
+                'x': monitor.x,
+                'y': monitor.y,
+                'is_primary': monitor.is_primary if hasattr(monitor, 'is_primary') else (i == 0)
+            })
+        
+        return jsonify({
+            'success': True,
+            'displays': displays
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 # SocketIO events
 @socketio.on('connect')
