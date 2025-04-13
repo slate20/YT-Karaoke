@@ -45,14 +45,31 @@ def initialize_player():
     # Add fullscreen argument directly to Chrome options
     options.add_argument("--start-fullscreen")
     
+    # Add Linux-specific Chrome options for stability
+    if os.name == 'posix':  # Check if running on Linux
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--remote-debugging-port=9222")
+        options.add_argument("--disable-software-rasterizer")
+    
     # Set initial window position before browser opens if display is selected
     if selected_display is not None:
         try:
             # Set window position via Chrome options
             options.add_argument(f"--window-position={selected_display['x']},{selected_display['y']}")
             
+            # For Linux, add window size to match the display
+            if os.name == 'posix':
+                options.add_argument(f"--window-size={selected_display['width']},{selected_display['height']}")
+            
             # Create the undetected Chrome driver with positioned options
             player_window = uc.Chrome(options=options)
+            
+            # Explicitly set window position and size after browser creation for Linux
+            if os.name == 'posix':
+                player_window.set_window_position(selected_display['x'], selected_display['y'])
+                player_window.set_window_size(selected_display['width'], selected_display['height'])
             
             # Load the player page
             player_window.get('http://localhost:5000/player')
@@ -61,6 +78,12 @@ def initialize_player():
             # Additional method to ensure fullscreen if the argument doesn't work
             # This uses JavaScript to request fullscreen mode
             time.sleep(2)  # Wait for page to load
+            
+            # Move to correct display before fullscreen (especially important for Linux)
+            if os.name == 'posix':
+                player_window.set_window_position(selected_display['x'], selected_display['y'])
+                time.sleep(0.5)  # Short delay to ensure window has moved
+            
             player_window.execute_script("document.documentElement.requestFullscreen();")
             
         except Exception as e:
@@ -366,33 +389,57 @@ def manage_queue():
 # Player controls
 @app.route('/api/player/start', methods=['POST'])
 def start_player():
-    global player_thread, player_running, selected_display
+    global player_thread, player_running, selected_display, player_window
     
     # Get display selection from request if available
     data = request.json
-    if data and 'display_id' in data:
-        display_id = data.get('display_id')
-        monitors = get_monitors()
-        
-        # Find the selected display
-        for i, monitor in enumerate(monitors):
-            if i == int(display_id):
+    if data and 'display_id' in data and data.get('display_id') is not None:
+        try:
+            display_id = int(data.get('display_id'))
+            monitors = get_monitors()
+            
+            # Find the selected display
+            if 0 <= display_id < len(monitors):
+                monitor = monitors[display_id]
                 selected_display = {
                     'x': monitor.x,
                     'y': monitor.y,
                     'width': monitor.width,
-                    'height': monitor.height
+                    'height': monitor.height,
+                    'is_primary': monitor.is_primary if hasattr(monitor, 'is_primary') else (display_id == 0)
                 }
-                break
+                print(f"Selected display {display_id}: {selected_display}")
+            else:
+                print(f"Invalid display ID: {display_id}, defaulting to primary display")
+                selected_display = None
+        except Exception as e:
+            print(f"Error selecting display: {e}")
+            selected_display = None
+    else:
+        # If no display_id provided, use primary display
+        selected_display = None
     
-    if player_window is None:
-        initialize_player()
+    # Close existing player window if it exists
+    if player_window is not None:
+        try:
+            player_window.quit()
+        except Exception as e:
+            print(f"Error closing existing player window: {e}")
+        finally:
+            player_window = None
     
+    # Initialize new player window
+    initialize_player()
+    
+    # Start player control thread if not already running
     if player_thread is None or not player_thread.is_alive():
         player_running = True
         player_thread = threading.Thread(target=player_control_thread)
         player_thread.daemon = True
         player_thread.start()
+    
+    # Emit a socket event to notify clients that the player is running
+    socketio.emit('player_status', {'running': True})
     
     return jsonify({'success': True})
 

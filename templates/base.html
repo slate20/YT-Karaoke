@@ -228,6 +228,26 @@
         socket.on('connect', function() {
             console.log('Connected to server');
         });
+        
+        // Listen for player status updates
+        socket.on('player_status', function(data) {
+            console.log('Player status update:', data);
+            if (data.running) {
+                // Enable player controls
+                document.getElementById('start-player').disabled = true;
+                document.getElementById('stop-player').disabled = false;
+                document.getElementById('next-song').disabled = false;
+                document.getElementById('play-pause').disabled = false;
+                document.getElementById('toggle-fullscreen').disabled = false;
+            } else {
+                // Disable player controls
+                document.getElementById('start-player').disabled = false;
+                document.getElementById('stop-player').disabled = true;
+                document.getElementById('next-song').disabled = true;
+                document.getElementById('play-pause').disabled = true;
+                document.getElementById('toggle-fullscreen').disabled = true;
+            }
+        });
 
         // Display selection functionality
         let displaySelectionModal;
