@@ -29,10 +29,12 @@
             background-color: #2d2d2d;
             color: #f8f9fa;
         }
-        /* Make placeholder text more readable with lighter color */
         .form-control::placeholder, .form-select::placeholder {
             color: #adb5bd;
             opacity: 1;
+        }
+        .form-text {
+            color:rgba(255, 255, 255, 0.75)
         }
         .video-tile {
             cursor: pointer;
@@ -185,10 +187,39 @@
             background-color: #3d3d3d;
             color: #ffffff;
         }
+        
+        /* Drag and Drop styles */
+        .queue-item {
+            cursor: grab;
+            transition: all 0.2s ease;
+        }
+        
+        .queue-item.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        
+        .queue-item.drag-over {
+            border-top: 2px solid #0d6efd;
+            padding-top: calc(0.5rem - 2px);
+        }
+        
+        .drag-handle {
+            cursor: grab;
+            padding: 0.25rem;
+            opacity: 0.5;
+            transition: opacity 0.2s ease;
+        }
+        
+        .queue-item:hover .drag-handle {
+            opacity: 1;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body>
+    {% block navbar %}{% endblock %}
+    
     <div class="container-fluid">
         {% block content %}{% endblock %}
     </div>
@@ -227,6 +258,26 @@
         
         socket.on('connect', function() {
             console.log('Connected to server');
+        });
+        
+        // Listen for player status updates
+        socket.on('player_status', function(data) {
+            console.log('Player status update:', data);
+            if (data.running) {
+                // Enable player controls
+                document.getElementById('start-player').disabled = true;
+                document.getElementById('stop-player').disabled = false;
+                document.getElementById('next-song').disabled = false;
+                document.getElementById('play-pause').disabled = false;
+                document.getElementById('toggle-fullscreen').disabled = false;
+            } else {
+                // Disable player controls
+                document.getElementById('start-player').disabled = false;
+                document.getElementById('stop-player').disabled = true;
+                document.getElementById('next-song').disabled = true;
+                document.getElementById('play-pause').disabled = true;
+                document.getElementById('toggle-fullscreen').disabled = true;
+            }
         });
 
         // Display selection functionality
