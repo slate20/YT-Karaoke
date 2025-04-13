@@ -1,6 +1,6 @@
 # YouTube Karaoke App
 
-A web application for hosting karaoke nights using YouTube videos. This app provides a control panel for managing singers and songs, and a separate player window for displaying the karaoke videos in fullscreen. Now with multi-display support and available as standalone executables for Windows and Linux!
+A desktop application for hosting karaoke nights using YouTube videos. This app provides a control panel for managing singers and songs, and a separate player window for displaying the karaoke videos in fullscreen. Now with multi-display support, drag-and-drop queue management, and available as a standalone desktop application with PyWebView!
 
 ## Features
 
@@ -12,7 +12,10 @@ A web application for hosting karaoke nights using YouTube videos. This app prov
 - Fullscreen video playback using undetected-chromedriver
 - Multi-display support with display selection modal
 - Automatic ad skipping and popup dismissal
-- Available as standalone executables for Windows and Linux
+- Available as a standalone desktop application with PyWebView
+- Drag-and-drop functionality for reordering the song queue
+- Restart and mute buttons for better playback control
+- User-configurable YouTube API key through settings page
 
 ## Requirements
 
@@ -48,12 +51,14 @@ A web application for hosting karaoke nights using YouTube videos. This app prov
 
 ## Usage
 
+### Web Application
+
 1. Activate the virtual environment:
    ```
    .\venv\Scripts\activate  # Windows
    ```
 
-2. Run the application:
+2. Run the web application:
    ```
    python app.py
    ```
@@ -61,6 +66,22 @@ A web application for hosting karaoke nights using YouTube videos. This app prov
 3. Open your browser and navigate to:
    ```
    http://localhost:5000
+   ```
+
+### Desktop Application
+
+1. Simply double-click the `start_karaoke.bat` file (Windows)
+
+OR
+
+1. Activate the virtual environment:
+   ```
+   .\venv\Scripts\activate  # Windows
+   ```
+
+2. Run the desktop application:
+   ```
+   python karaoke_app.py
    ```
 
 4. Use the control panel to:
@@ -87,43 +108,32 @@ A web application for hosting karaoke nights using YouTube videos. This app prov
 - If search doesn't work, verify your YouTube API key is correct
 - If the player window doesn't open, check that you have the necessary permissions for Chrome to launch
 
-## Building Executables
-
-### Windows
+## Running as a Desktop Application
 
 1. Make sure all dependencies are installed:
    ```
    pip install -r requirements.txt
+   pip install pywebview
    ```
 
-2. Run the build script:
+2. Run the desktop application:
    ```
-   build_windows_exe.bat
-   ```
-
-3. The executable will be created in the `dist` folder as `YT_Karaoke_Windows.exe`
-
-### Linux
-
-1. Make sure all dependencies are installed:
-   ```
-   pip install -r requirements.txt
+   python karaoke_app.py
    ```
 
-2. Run the build script:
-   ```
-   chmod +x build_linux_exe.sh
-   ./build_linux_exe.sh
-   ```
+   Or simply double-click the `start_karaoke.bat` file (Windows)
 
-3. The executable will be created in the `dist` folder as `YT_Karaoke_Linux`
+3. The application will open in a dedicated window, no browser needed
 
-## Running the Executable
+## Features of the Desktop Application
 
-1. Make sure Chrome is installed on your system
-2. Run the executable
-3. The application will start and open in your browser automatically
-4. No Python installation is required to run the packaged executable
+- Runs in its own window without needing a web browser
+- Simplified user experience with a single application window
+- All the features of the web application in a desktop environment
+- Restart button to replay the current song
+- Mute button to control audio
+- Drag-and-drop functionality for reordering the song queue
+- Settings page for configuring your YouTube API key
 
 ## License
 

@@ -2,6 +2,14 @@
 
 {% block title %}Karaoke Control Panel{% endblock %}
 
+{% block navbar %}
+<div class="d-flex justify-content-between align-items-center mt-2 mb-3 px-3">
+    <a href="/settings" class="btn btn-outline-secondary" title="Settings">
+        <i class="fas fa-cog"></i>
+    </a>
+</div>
+{% endblock %}
+
 {% block content %}
 <div class="row mt-3">
     <div class="col-12">
@@ -12,29 +20,10 @@
 </div>
 
 <div class="row">
-    <!-- Singer Management -->
+    <!-- Left Column: Player Controls and Queue -->
     <div class="col-md-3">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Singers</h5>
-            </div>
-            <div class="card-body">
-                <form id="add-singer-form" class="mb-3">
-                    <div class="input-group">
-                        <input type="text" id="singer-name" class="form-control" placeholder="Add singer...">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus"></i>
-                        </button>
-                    </div>
-                </form>
-                <div id="singers-list" class="list-group">
-                    <!-- Singers will be added here dynamically -->
-                </div>
-            </div>
-        </div>
-
         <!-- Player Controls - Mixing Console Style -->
-        <div class="card">
+        <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Player Controls</h5>
             </div>
@@ -61,18 +50,30 @@
                 <!-- Player Section (Combined Transport and Display) -->
                 <div class="console-section">
                     <div class="console-label text-center mb-2">PLAYBACK</div>
-                    <div class="d-flex justify-content-around">
+                    <div class="d-flex justify-content-around flex-wrap">
+                        <div class="console-button-container">
+                            <button id="restart-song" class="console-button transport" disabled>
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <div class="console-button-label">RESTART</div>
+                        </div>
                         <div class="console-button-container">
                             <button id="next-song" class="console-button transport" disabled>
                                 <i class="fas fa-step-forward"></i>
                             </button>
-                            <div class="console-button-label">LOAD</div>
+                            <div class="console-button-label">LOAD/NEXT</div>
                         </div>
                         <div class="console-button-container">
                             <button id="play-pause" class="console-button transport" disabled>
                                 <i class="fas fa-play me-1"></i><i class="fas fa-pause"></i>
                             </button>
                             <div class="console-button-label">PLAY/PAUSE</div>
+                        </div>
+                        <div class="console-button-container">
+                            <button id="toggle-mute" class="console-button transport" disabled>
+                                <i class="fas fa-volume-mute"></i>
+                            </button>
+                            <div class="console-button-label">MUTE</div>
                         </div>
                         <div class="console-button-container">
                             <button id="toggle-fullscreen" class="console-button display" disabled>
@@ -84,10 +85,8 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Song Queue -->
-    <div class="col-md-3">
+        <!-- Song Queue -->
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-list me-2"></i>Song Queue</h5>
@@ -107,7 +106,29 @@
         </div>
     </div>
 
-    <!-- Song Search -->
+    <!-- Middle Column: Singer Management -->
+    <div class="col-md-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Singers</h5>
+            </div>
+            <div class="card-body">
+                <form id="add-singer-form" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="singer-name" class="form-control" placeholder="Add singer...">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </form>
+                <div id="singers-list" class="list-group">
+                    <!-- Singers will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Song Search -->
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
@@ -226,8 +247,13 @@ function updateQueueList(queue) {
     queue.forEach((song, index) => {
         const item = document.createElement('div');
         item.className = 'list-group-item queue-item';
+        item.draggable = true;
+        item.setAttribute('data-index', index);
         item.innerHTML = `
             <div class="d-flex align-items-start">
+                <div class="drag-handle me-2">
+                    <i class="fas fa-grip-vertical text-muted"></i>
+                </div>
                 <img src="${song.thumbnail}" alt="${song.title}" class="me-2" style="width: 60px;">
                 <div>
                     <h6 class="mb-1">${song.title}</h6>
@@ -251,6 +277,9 @@ function updateQueueList(queue) {
             removeQueueItem(index);
         });
     });
+    
+    // Add drag and drop functionality
+    setupDragAndDrop();
 }
 
 function updateCurrentSong(song) {
@@ -270,14 +299,16 @@ function updateCurrentSong(song) {
             </div>
         `;
         
-        // Enable next song button
+        // Enable song control buttons
         document.getElementById('next-song').disabled = false;
+        document.getElementById('restart-song').disabled = false;
     } else {
         currentSongContainer.classList.add('d-none');
         currentSong.innerHTML = '';
         
-        // Disable next song button
+        // Disable song control buttons
         document.getElementById('next-song').disabled = true;
+        document.getElementById('restart-song').disabled = true;
     }
 }
 
@@ -398,7 +429,12 @@ function searchVideos(query) {
     searchResults.innerHTML = '<div class="col-12 text-center"><div class="spinner-border" role="status"></div></div>';
     
     fetch(`/api/search?q=${encodeURIComponent(query)}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => { throw err; });
+            }
+            return response.json();
+        })
         .then(data => {
             searchResults.innerHTML = '';
             
@@ -453,6 +489,38 @@ function searchVideos(query) {
                     showSingerSelectionModal(videoId, videoTitle, videoThumbnail, videoDuration);
                 });
             });
+        })
+        .catch(error => {
+            searchResults.innerHTML = '';
+            let errorMessage = 'An error occurred while searching for videos';
+            
+            if (error.error && error.message) {
+                errorMessage = error.message;
+                
+                // If it's an API key issue, add a link to settings
+                if (errorMessage.includes('API key')) {
+                    searchResults.innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger" role="alert">
+                                <h5><i class="fas fa-exclamation-triangle me-2"></i>YouTube API Error</h5>
+                                <p>${errorMessage}</p>
+                                <a href="/settings" class="btn btn-primary">
+                                    <i class="fas fa-cog me-2"></i>Go to Settings
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
+            }
+            
+            searchResults.innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>${errorMessage}
+                    </div>
+                </div>
+            `;
         });
 }
 
@@ -472,8 +540,10 @@ function startPlayerWithoutDisplaySelection() {
             if (data.success) {
                 document.getElementById('start-player').disabled = true;
                 document.getElementById('stop-player').disabled = false;
+                document.getElementById('restart-song').disabled = false;
                 document.getElementById('next-song').disabled = false;
                 document.getElementById('play-pause').disabled = false;
+                document.getElementById('toggle-mute').disabled = false;
                 document.getElementById('toggle-fullscreen').disabled = false;
             }
         });
@@ -488,8 +558,10 @@ function stopPlayer() {
             if (data.success) {
                 document.getElementById('start-player').disabled = false;
                 document.getElementById('stop-player').disabled = true;
+                document.getElementById('restart-song').disabled = true;
                 document.getElementById('next-song').disabled = true;
                 document.getElementById('play-pause').disabled = true;
+                document.getElementById('toggle-mute').disabled = true;
                 document.getElementById('toggle-fullscreen').disabled = true;
             }
         });
@@ -527,6 +599,112 @@ function toggleFullscreen() {
         });
 }
 
+function restartSong() {
+    fetch('/api/player/restart', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            // No UI updates needed for restart
+        });
+}
+
+function toggleMute() {
+    fetch('/api/player/toggle_mute', {
+        method: 'POST'
+    })
+        .then(response => response.json())
+        .then(data => {
+            // Toggle mute icon if we know the state
+            if (data.hasOwnProperty('muted')) {
+                const muteButton = document.getElementById('toggle-mute');
+                if (data.muted) {
+                    muteButton.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                } else {
+                    muteButton.innerHTML = '<i class="fas fa-volume-up"></i>';
+                }
+            }
+        });
+}
+
+// Drag and drop functionality for queue reordering
+function setupDragAndDrop() {
+    const queueItems = document.querySelectorAll('.queue-item');
+    let draggedItem = null;
+    
+    queueItems.forEach(item => {
+        // Drag start event
+        item.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
+            
+            // Set data transfer for Firefox compatibility
+            e.dataTransfer.setData('text/plain', '');
+            e.dataTransfer.effectAllowed = 'move';
+        });
+        
+        // Drag end event
+        item.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            draggedItem = null;
+            
+            // Reset all item styles
+            queueItems.forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        });
+        
+        // Drag over event
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            if (this !== draggedItem) {
+                this.classList.add('drag-over');
+            }
+        });
+        
+        // Drag leave event
+        item.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+        
+        // Drop event
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (this !== draggedItem) {
+                const fromIndex = parseInt(draggedItem.getAttribute('data-index'));
+                const toIndex = parseInt(this.getAttribute('data-index'));
+                
+                // Call API to reorder queue
+                reorderQueueItem(fromIndex, toIndex);
+                
+                this.classList.remove('drag-over');
+            }
+        });
+    });
+}
+
+function reorderQueueItem(fromIndex, toIndex) {
+    fetch('/api/queue', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            fromIndex: fromIndex,
+            toIndex: toIndex
+        })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Failed to reorder queue:', data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error reordering queue:', error);
+        });
+}
+
 // Utility Functions
 function formatDuration(seconds) {
     const minutes = Math.floor(seconds / 60);
@@ -547,11 +725,67 @@ socket.on('current_song_update', function(data) {
     updateCurrentSong(data.current_song);
 });
 
+socket.on('player_status', function(data) {
+    if (data.running) {
+        document.getElementById('start-player').disabled = true;
+        document.getElementById('stop-player').disabled = false;
+        document.getElementById('restart-song').disabled = false;
+        document.getElementById('next-song').disabled = false;
+        document.getElementById('play-pause').disabled = false;
+        document.getElementById('toggle-mute').disabled = false;
+        document.getElementById('toggle-fullscreen').disabled = false;
+    } else {
+        document.getElementById('start-player').disabled = false;
+        document.getElementById('stop-player').disabled = true;
+        document.getElementById('restart-song').disabled = true;
+        document.getElementById('next-song').disabled = true;
+        document.getElementById('play-pause').disabled = true;
+        document.getElementById('toggle-mute').disabled = true;
+        document.getElementById('toggle-fullscreen').disabled = true;
+    }
+});
+
+// Function to initialize player controls based on player state
+function initializePlayerControls() {
+    // Check if player is running
+    fetch('/api/player/status', {
+        method: 'GET'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.running) {
+            // Player is running, enable control buttons
+            document.getElementById('start-player').disabled = true;
+            document.getElementById('stop-player').disabled = false;
+            document.getElementById('restart-song').disabled = !data.has_current_song;
+            document.getElementById('next-song').disabled = false;
+            document.getElementById('play-pause').disabled = false;
+            document.getElementById('toggle-mute').disabled = false;
+            document.getElementById('toggle-fullscreen').disabled = false;
+        } else {
+            // Player is not running, disable control buttons
+            document.getElementById('start-player').disabled = false;
+            document.getElementById('stop-player').disabled = true;
+            document.getElementById('restart-song').disabled = true;
+            document.getElementById('next-song').disabled = true;
+            document.getElementById('play-pause').disabled = true;
+            document.getElementById('toggle-mute').disabled = true;
+            document.getElementById('toggle-fullscreen').disabled = true;
+        }
+    })
+    .catch(error => {
+        console.error('Error checking player status:', error);
+    });
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
     // Load initial data
     loadSingers();
     loadQueue();
+    
+    // Check player status and initialize button states
+    initializePlayerControls();
     
     // Add singer form
     document.getElementById('add-singer-form').addEventListener('submit', function(e) {
@@ -574,8 +808,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Player control buttons
     document.getElementById('start-player').addEventListener('click', startPlayer);
     document.getElementById('stop-player').addEventListener('click', stopPlayer);
+    document.getElementById('restart-song').addEventListener('click', restartSong);
     document.getElementById('next-song').addEventListener('click', nextSong);
     document.getElementById('play-pause').addEventListener('click', playPause);
+    document.getElementById('toggle-mute').addEventListener('click', toggleMute);
     document.getElementById('toggle-fullscreen').addEventListener('click', toggleFullscreen);
 });
 {% endblock %}
