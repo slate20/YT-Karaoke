@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Get the directory where the AppImage is located
+APPDIR="$(dirname "$(readlink -f "$0")")"
+export PATH="$APPDIR/usr/bin:$PATH"
+
+# Set up Python environment
+export PYTHONHOME="$APPDIR/usr/lib/$APP_NAME/venv"
+export PYTHONPATH="$APPDIR/usr/share/$APP_NAME:$PYTHONPATH"
+
+# Chrome options for Selenium
+export CHROME_OPTIONS="--no-sandbox --disable-dev-shm-usage --disable-gpu --remote-debugging-port=9222 --disable-software-rasterizer"
+
+# Start the app
+cd "$APPDIR/usr/share/$APP_NAME"
+"$APPDIR/usr/lib/$APP_NAME/venv/bin/python" app.py &
+APP_PID=$!
+
+# Wait for server to start
+sleep 3
+
+# Open browser
+if command -v xdg-open &> /dev/null; then
+    xdg-open http://127.0.0.1:5000
+elif command -v firefox &> /dev/null; then
+    firefox http://127.0.0.1:5000
+elif command -v google-chrome &> /dev/null; then
+    google-chrome $CHROME_OPTIONS http://127.0.0.1:5000
+fi
+
+# Wait for app to exit
+wait $APP_PID

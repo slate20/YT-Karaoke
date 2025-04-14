@@ -1,0 +1,249 @@
+{% extends "mobile_base.html" %}
+
+{% block title %}Queue & Singers{% endblock %}
+{% block header_title %}Queue & Singers{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Singers Section -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Singers</h5>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#singers-collapse">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="collapse show" id="singers-collapse">
+                    <div class="card-body">
+                        <form id="add-singer-form" class="mb-3">
+                            <div class="input-group">
+                                <input type="text" id="singer-name" class="form-control" placeholder="New singer name">
+                                <button type="submit" class="btn btn-primary">Add</button>
+                            </div>
+                        </form>
+                        
+                        <div id="singers-list" class="list-group">
+                            <!-- Singers will be added here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Queue Section -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Song Queue</h5>
+                </div>
+                <div class="card-body">
+                    <div id="current-song-container" class="mb-3">
+                        <h6 class="text-center mb-2">Now Playing</h6>
+                        <div id="no-current-song" class="text-center py-3">
+                            <p class="mb-0 text-muted">No song currently playing</p>
+                        </div>
+                        <div id="current-song-info" class="d-none">
+                            <div class="card bg-dark">
+                                <div class="card-body p-3">
+                                    <div class="d-flex align-items-center">
+                                        <img id="current-thumbnail" src="" alt="Thumbnail" class="me-3" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px;">
+                                        <div class="text-start">
+                                            <h6 id="current-title" class="mb-1"></h6>
+                                            <span class="badge bg-primary" id="current-singer"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="text-center mb-2">Up Next</h6>
+                    <div id="queue-list" class="list-group">
+                        <!-- Queue items will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Singer Management
+function loadSingers() {
+    fetch('/api/singers')
+        .then(response => response.json())
+        .then(data => {
+            updateSingersList(data.singers);
+        });
+}
+
+function addSinger(name) {
+    fetch('/api/singers', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            name: name
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Clear input field
+            document.getElementById('singer-name').value = '';
+        }
+    });
+}
+
+function removeSinger(name) {
+    fetch('/api/singers', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            name: name
+        })
+    });
+}
+
+function updateSingersList(singers) {
+    const singersList = document.getElementById('singers-list');
+    if (!singersList) return;
+    
+    singersList.innerHTML = '';
+    
+    if (singers.length === 0) {
+        singersList.innerHTML = '<div class="text-center py-3 text-muted">No singers added yet</div>';
+        return;
+    }
+    
+    singers.forEach(singer => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = `
+            <span>${singer}</span>
+            <button class="btn btn-sm btn-danger remove-singer" data-singer="${singer}">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        singersList.appendChild(item);
+    });
+    
+    // Add event listeners to remove buttons
+    document.querySelectorAll('.remove-singer').forEach(button => {
+        button.addEventListener('click', function() {
+            const singer = this.getAttribute('data-singer');
+            removeSinger(singer);
+        });
+    });
+}
+
+// Queue Management
+function loadQueue() {
+    fetch('/api/queue')
+        .then(response => response.json())
+        .then(data => {
+            updateQueueList(data.queue);
+            if (data.current_song) {
+                updateCurrentSong(data.current_song);
+            }
+        });
+}
+
+function removeFromQueue(index) {
+    fetch('/api/queue', {
+        method: 'DELETE',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            index: index
+        })
+    });
+}
+
+function updateQueueList(queue) {
+    const queueList = document.getElementById('queue-list');
+    if (!queueList) return;
+    
+    queueList.innerHTML = '';
+    
+    if (queue.length === 0) {
+        queueList.innerHTML = '<div class="text-center py-3 text-muted">Queue is empty</div>';
+        return;
+    }
+    
+    queue.forEach((song, index) => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item queue-item';
+        item.innerHTML = `
+            <div class="d-flex align-items-center">
+                <img src="${song.thumbnail}" alt="Thumbnail" class="me-3" style="width: 80px; height: 45px; object-fit: cover; border-radius: 4px;">
+                <div>
+                    <h6 class="mb-1">${song.title}</h6>
+                    <span class="badge bg-primary">${song.singer}</span>
+                </div>
+                <div class="queue-controls">
+                    <button class="btn btn-sm btn-danger remove-queue-item" data-index="${index}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        queueList.appendChild(item);
+    });
+    
+    // Add event listeners to remove buttons
+    document.querySelectorAll('.remove-queue-item').forEach(button => {
+        button.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            removeFromQueue(index);
+        });
+    });
+}
+
+function updateCurrentSong(song) {
+    const noCurrentSongEl = document.getElementById('no-current-song');
+    const currentSongInfoEl = document.getElementById('current-song-info');
+    
+    if (!noCurrentSongEl || !currentSongInfoEl) return;
+    
+    if (song) {
+        document.getElementById('current-title').textContent = song.title;
+        document.getElementById('current-singer').textContent = song.singer;
+        document.getElementById('current-thumbnail').src = song.thumbnail;
+        
+        noCurrentSongEl.classList.add('d-none');
+        currentSongInfoEl.classList.remove('d-none');
+    } else {
+        noCurrentSongEl.classList.remove('d-none');
+        currentSongInfoEl.classList.add('d-none');
+    }
+}
+
+// Initialize data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial data
+    loadSingers();
+    loadQueue();
+    
+    // Add singer form
+    const addSingerForm = document.getElementById('add-singer-form');
+    if (addSingerForm) {
+        addSingerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('singer-name').value.trim();
+            if (name) {
+                addSinger(name);
+            }
+        });
+    }
+});
+{% endblock %}

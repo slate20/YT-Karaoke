@@ -1,0 +1,9 @@
+flask==3.1.0
+flask-socketio==5.5.1
+google-api-python-client==2.166.0
+python-dotenv==1.1.0
+undetected-chromedriver==3.5.5
+selenium==4.31.0
+requests==2.32.3
+screeninfo==0.8.1
+pyinstaller==6.12.0

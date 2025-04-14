@@ -1,0 +1,147 @@
+{% extends "mobile_base.html" %}
+
+{% block title %}Search Songs{% endblock %}
+{% block header_title %}Search Songs{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <form id="search-form" class="mb-3">
+                        <div class="input-group">
+                            <input type="text" id="search-query" class="form-control" placeholder="Search for karaoke songs...">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div id="search-status" class="text-center py-3 d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 mb-0">Searching...</p>
+                    </div>
+                    
+                    <div id="search-error" class="alert alert-danger d-none" role="alert">
+                        <!-- Error message will be displayed here -->
+                    </div>
+                    
+                    <div id="search-results" class="row g-3">
+                        <!-- Search results will be added here dynamically -->
+                        <div class="col-12 text-center text-muted py-4">
+                            <i class="fas fa-search fa-3x mb-3"></i>
+                            <p>Search for songs to add to the queue</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Search functionality
+function searchVideos(query) {
+    const searchStatus = document.getElementById('search-status');
+    const searchError = document.getElementById('search-error');
+    const searchResults = document.getElementById('search-results');
+    
+    // Show loading indicator
+    searchStatus.classList.remove('d-none');
+    searchError.classList.add('d-none');
+    searchResults.innerHTML = '';
+    
+    fetch(`/api/search?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            // Hide loading indicator
+            searchStatus.classList.add('d-none');
+            
+            if (data.error) {
+                // Show error message
+                searchError.textContent = data.message;
+                searchError.classList.remove('d-none');
+                return;
+            }
+            
+            if (data.items && data.items.length > 0) {
+                // Display search results
+                searchResults.innerHTML = '';
+                
+                data.items.forEach(video => {
+                    const videoCard = document.createElement('div');
+                    videoCard.className = 'col-12 mb-3';
+                    videoCard.innerHTML = `
+                        <div class="card video-tile">
+                            <div class="row g-0">
+                                <div class="col-4">
+                                    <img src="${video.thumbnail}" class="img-fluid rounded-start" alt="Thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
+                                </div>
+                                <div class="col-8">
+                                    <div class="card-body">
+                                        <h6 class="card-title">${video.title}</h6>
+                                        <p class="card-text">
+                                            <small class="text-muted">${video.duration}</small>
+                                        </p>
+                                        <button class="btn btn-sm btn-primary add-to-queue-btn" 
+                                            data-video-id="${video.id}" 
+                                            data-title="${video.title}" 
+                                            data-thumbnail="${video.thumbnail}" 
+                                            data-duration="${video.duration}">
+                                            <i class="fas fa-plus me-1"></i>Add to Queue
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    searchResults.appendChild(videoCard);
+                });
+                
+                // Add event listeners to add buttons
+                document.querySelectorAll('.add-to-queue-btn').forEach(button => {
+                    button.addEventListener('click', function() {
+                        const videoId = this.getAttribute('data-video-id');
+                        const title = this.getAttribute('data-title');
+                        const thumbnail = this.getAttribute('data-thumbnail');
+                        const duration = this.getAttribute('data-duration');
+                        
+                        showSingerSelectionModal(videoId, title, thumbnail, duration);
+                    });
+                });
+            } else {
+                // No results found
+                searchResults.innerHTML = `
+                    <div class="col-12 text-center py-4">
+                        <p class="text-muted">No results found for "${query}"</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            // Hide loading indicator and show error
+            searchStatus.classList.add('d-none');
+            searchError.textContent = `Error searching: ${error.message}`;
+            searchError.classList.remove('d-none');
+            console.error('Error searching videos:', error);
+        });
+}
+
+// Initialize search form on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const searchForm = document.getElementById('search-form');
+    if (searchForm) {
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const query = document.getElementById('search-query').value.trim();
+            if (query) {
+                searchVideos(query);
+            }
+        });
+    }
+});
+{% endblock %}
