@@ -1,6 +1,9 @@
 import os
 import sys
 import json
+import socket
+import base64
+import io
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_socketio import SocketIO
 import undetected_chromedriver as uc
@@ -16,6 +19,8 @@ import threading
 import time
 from screeninfo import get_monitors
 from googleapiclient.errors import HttpError
+import qrcode
+from PIL import Image
 
 # Load environment variables
 load_dotenv()
@@ -376,6 +381,7 @@ def settings():
     api_key_status = None
     error_message = None
     first_time = request.args.get('first_time') == 'True'
+    show_api_form = request.args.get('edit_api_key') == 'true' or not config.get('youtube_api_key')
     
     if request.method == 'POST':
         new_api_key = request.form.get('youtube_api_key', '').strip()
@@ -393,6 +399,10 @@ def settings():
                 # Reinitialize the YouTube API with the new key
                 youtube = build('youtube', 'v3', developerKey=new_api_key)
                 
+                # Redirect to the control page after successful API key save
+                return redirect(url_for('index'))
+                
+                # This code won't be reached due to the redirect, but keeping it for completeness
                 api_key_status = 'success'
             except HttpError as e:
                 error_message = f"Invalid API key or API quota exceeded: {str(e)}"
@@ -409,10 +419,59 @@ def settings():
         error_message = "Please set up your YouTube API key to use the application"
         api_key_status = 'error'
     
+    # Create obfuscated version of the API key for display
+    obfuscated_api_key = None
+    current_api_key = config.get('youtube_api_key', '')
+    if current_api_key and not show_api_form:
+        # Show first 4 and last 4 characters, obfuscate the rest
+        if len(current_api_key) > 8:
+            obfuscated_api_key = current_api_key[:4] + '*' * (len(current_api_key) - 8) + current_api_key[-4:]
+        else:
+            obfuscated_api_key = '*' * len(current_api_key)  # Fully obfuscate if key is too short
+    
+    # Get the LAN IP address (not loopback)
+    lan_ip = None
+    try:
+        # Create a socket that connects to an external server
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Doesn't need to be reachable
+        s.connect(('8.8.8.8', 1))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception as e:
+        print(f"Error getting LAN IP: {e}")
+        lan_ip = request.host.split(':')[0]  # Fallback to the request host
+    
+    # Generate QR code for mobile access
+    qr_code_data = None
+    mobile_url = None
+    if lan_ip and current_api_key:
+        mobile_url = f"http://{lan_ip}:5000/mobile"
+        # Create QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(mobile_url)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert the image to base64 for embedding in HTML
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        qr_code_data = base64.b64encode(buffered.getvalue()).decode()
+    
     return render_template('settings.html', 
-                          current_api_key=config.get('youtube_api_key', ''),
+                          current_api_key=current_api_key,
                           api_key_status=api_key_status,
-                          error_message=error_message)
+                          error_message=error_message,
+                          qr_code_data=qr_code_data,
+                          mobile_url=mobile_url,
+                          obfuscated_api_key=obfuscated_api_key,
+                          show_api_form=show_api_form)
 
 @app.route('/player')
 def player():
@@ -468,14 +527,31 @@ def search_videos():
         duration_map = {}
         for item in video_details['items']:
             duration = item['contentDetails']['duration']
-            # Convert ISO 8601 duration to seconds (simplified)
+            # Convert ISO 8601 duration to seconds (improved to handle hours)
+            hours = 0
             minutes = 0
             seconds = 0
+            
+            # Remove PT prefix
+            duration = duration.replace('PT', '')
+            
+            # Extract hours if present
+            if 'H' in duration:
+                hours_parts = duration.split('H')
+                hours = int(hours_parts[0])
+                duration = hours_parts[1]
+            
+            # Extract minutes if present
             if 'M' in duration:
-                minutes = int(duration.split('M')[0].split('PT')[1])
+                minutes_parts = duration.split('M')
+                minutes = int(minutes_parts[0])
+                duration = minutes_parts[1]
+            
+            # Extract seconds if present
             if 'S' in duration:
-                seconds = int(duration.split('S')[0].split('M')[-1])
-            duration_seconds = minutes * 60 + seconds
+                seconds = int(duration.split('S')[0])
+                
+            duration_seconds = hours * 3600 + minutes * 60 + seconds
             duration_map[item['id']] = duration_seconds
         
         # Add duration to search results
@@ -841,4 +917,242 @@ def handle_connect():
         socketio.emit('current_song_update', {'current_song': current_song})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)
+# Function to fetch video details including duration
+def fetch_video_details(video_id):
+    global current_song, song_timer
+    
+    if not youtube or not video_id:
+        return
+    
+    try:
+        # Get video details from YouTube API
+        video_response = youtube.videos().list(
+            part='contentDetails,snippet',
+            id=video_id
+        ).execute()
+        
+        if video_response['items']:
+            # Extract duration in ISO 8601 format (PT#M#S)
+            iso_duration = video_response['items'][0]['contentDetails']['duration']
+            # Convert to seconds
+            duration_seconds = isodate.parse_duration(iso_duration).total_seconds()
+            
+            # Update current song with duration
+            current_song['duration'] = duration_seconds
+            current_song['duration_formatted'] = format_duration(duration_seconds)
+            
+            # Set up timer to pause video 1 second before the end
+            if duration_seconds > 0:
+                pause_time = max(1, duration_seconds - 1)  # Ensure we don't go negative
+                print(f"Setting timer to pause at {pause_time} seconds")
+                
+                # Cancel any existing timer
+                if song_timer:
+                    song_timer.cancel()
+                
+                # Create new timer
+                song_timer = threading.Timer(pause_time, auto_pause_at_end)
+                song_timer.daemon = True
+                song_timer.start()
+            
+            # Emit updated song info
+            socketio.emit('current_song_update', {'current_song': current_song})
+            
+    except Exception as e:
+        print(f"Error fetching video details: {e}")
+
+# Function to format duration in MM:SS format
+def format_duration(seconds):
+    minutes, seconds = divmod(int(seconds), 60)
+    return f"{minutes}:{seconds:02d}"
+
+# Function to automatically pause at the end of a song
+def auto_pause_at_end():
+    global autoplay_enabled
+    
+    print("Auto-pause timer triggered")
+    
+    if player_window and current_song:
+        if autoplay_enabled and queue:
+            # If autoplay is enabled and there are songs in the queue, play the next song
+            print("Autoplay enabled, loading next song")
+            next_song()
+        else:
+            # Otherwise pause the current song
+            print("Pausing at end of song")
+            try:
+                # Use space key to pause
+                actions = ActionChains(player_window)
+                actions.send_keys(Keys.SPACE)
+                actions.perform()
+                
+                # Notify clients
+                socketio.emit('player_action', {'action': 'paused_at_end'})
+            except Exception as e:
+                print(f"Error pausing at end: {e}")
+
+# API endpoint to toggle autoplay
+@app.route('/api/player/toggle_autoplay', methods=['POST'])
+def toggle_autoplay():
+    global autoplay_enabled
+    
+    # Toggle the autoplay state
+    autoplay_enabled = not autoplay_enabled
+    
+    # Notify clients of the new state
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# API endpoint to get autoplay status
+@app.route('/api/player/autoplay_status', methods=['GET'])
+def get_autoplay_status():
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    socketio.emit('singers_update', {'singers': singers})
+    socketio.emit('queue_update', {'queue': queue})
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    if current_song:
+        socketio.emit('current_song_update', {'current_song': current_song})
+
+if __name__ == '__main__':
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)
+    global autoplay_enabled
+    
+    # Toggle the autoplay state
+    autoplay_enabled = not autoplay_enabled
+    
+    # Notify clients of the new state
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# API endpoint to get autoplay status
+@app.route('/api/player/autoplay_status', methods=['GET'])
+def get_autoplay_status():
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    socketio.emit('singers_update', {'singers': singers})
+    socketio.emit('queue_update', {'queue': queue})
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    if current_song:
+        socketio.emit('current_song_update', {'current_song': current_song})
+
+if __name__ == '__main__':
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)
+            elif not near_end:
+                print(f"Timer triggered but not near end of video (time: {current_time}), rescheduling")
+                # If we're not near the end, reschedule the timer
+                # This can happen if ads or other interruptions affected timing
+                song_timer = threading.Timer(30, auto_pause_at_end)
+                song_timer.daemon = True
+                song_timer.start()
+                return
+        except Exception as e:
+            print(f"Error checking video state: {e}")
+        
+        if autoplay_enabled and queue:
+            # If autoplay is enabled and there are songs in the queue, play the next song
+            print("Autoplay enabled, loading next song")
+            next_song()
+        else:
+            # Otherwise pause the current song
+            print("Pausing at end of song")
+            try:
+                # Use space key to pause
+                actions = ActionChains(player_window)
+                actions.send_keys(Keys.SPACE)
+                actions.perform()
+                
+                # Notify clients
+                socketio.emit('player_action', {'action': 'paused_at_end'})
+            except Exception as e:
+                print(f"Error pausing at end: {e}")
+
+# API endpoint to toggle autoplay
+@app.route('/api/player/toggle_autoplay', methods=['POST'])
+def toggle_autoplay():
+    global autoplay_enabled
+    
+    # Toggle the autoplay state
+    autoplay_enabled = not autoplay_enabled
+    
+    # Notify clients of the new state
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# API endpoint to get autoplay status
+@app.route('/api/player/autoplay_status', methods=['GET'])
+def get_autoplay_status():
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    socketio.emit('singers_update', {'singers': singers})
+    socketio.emit('queue_update', {'queue': queue})
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    if current_song:
+        socketio.emit('current_song_update', {'current_song': current_song})
+
+if __name__ == '__main__':
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)
+if __name__ == '__main__':
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)
+    socketio.run(app, host='0.0.0.0', debug=True)
+@app.route('/api/player/autoplay_status', methods=['GET'])
+def get_autoplay_status():
+    return jsonify({
+        'success': True,
+        'autoplay_enabled': autoplay_enabled
+    })
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    socketio.emit('singers_update', {'singers': singers})
+    socketio.emit('queue_update', {'queue': queue})
+    socketio.emit('autoplay_update', {'enabled': autoplay_enabled})
+    if current_song:
+        socketio.emit('current_song_update', {'current_song': current_song})
+
+if __name__ == '__main__':
+    # Run on all network interfaces (0.0.0.0) so it can be accessed from other devices
+    # Note: In production, you should use a proper WSGI server and configure security appropriately
+    socketio.run(app, host='0.0.0.0', debug=True)

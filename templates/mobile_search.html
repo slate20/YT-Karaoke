@@ -73,25 +73,38 @@ function searchVideos(query) {
                 searchResults.innerHTML = '';
                 
                 data.items.forEach(video => {
+                    // Extract the correct properties from the YouTube API response
+                    const videoId = video.id.videoId;
+                    const title = video.snippet.title;
+                    const thumbnail = video.snippet.thumbnails.medium.url;
+                    
+                    // Format duration in minutes and seconds
+                    let durationText = 'Unknown';
+                    if (video.duration !== undefined) {
+                        const minutes = Math.floor(video.duration / 60);
+                        const seconds = video.duration % 60;
+                        durationText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                    }
+                    
                     const videoCard = document.createElement('div');
                     videoCard.className = 'col-12 mb-3';
                     videoCard.innerHTML = `
                         <div class="card video-tile">
                             <div class="row g-0">
                                 <div class="col-4">
-                                    <img src="${video.thumbnail}" class="img-fluid rounded-start" alt="Thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
+                                    <img src="${thumbnail}" class="img-fluid rounded-start" alt="Thumbnail" style="width: 100%; height: 100%; object-fit: cover;">
                                 </div>
                                 <div class="col-8">
                                     <div class="card-body">
-                                        <h6 class="card-title">${video.title}</h6>
+                                        <h6 class="card-title">${title}</h6>
                                         <p class="card-text">
-                                            <small class="text-muted">${video.duration}</small>
+                                            <small class="text-muted">${durationText}</small>
                                         </p>
                                         <button class="btn btn-sm btn-primary add-to-queue-btn" 
-                                            data-video-id="${video.id}" 
-                                            data-title="${video.title}" 
-                                            data-thumbnail="${video.thumbnail}" 
-                                            data-duration="${video.duration}">
+                                            data-video-id="${videoId}" 
+                                            data-title="${title}" 
+                                            data-thumbnail="${thumbnail}" 
+                                            data-duration="${video.duration || 0}">
                                             <i class="fas fa-plus me-1"></i>Add to Queue
                                         </button>
                                     </div>

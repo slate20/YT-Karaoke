@@ -107,9 +107,10 @@
             align-items: center;
             justify-content: center;
             margin-bottom: 8px;
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
             transition: all 0.2s ease;
+            border-radius: 12px;
         }
         
         /* Power buttons remain circular */
@@ -119,8 +120,8 @@
         
         /* Playback buttons are rectangular with rounded corners */
         .transport, .display {
-            border-radius: 10px;
-            width: 70px;
+            border-radius: 12px;
+            width: 80px;
             height: 50px;
         }
         
@@ -139,6 +140,46 @@
             color: #ccc;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+        
+        /* Button Types */
+        .power-on {
+            background: linear-gradient(145deg, #28a745, #218838);
+            color: white;
+        }
+        
+        .power-off {
+            background: linear-gradient(145deg, #dc3545, #c82333);
+            color: white;
+        }
+        
+        .transport {
+            background: linear-gradient(145deg, #007bff, #0069d9);
+            color: white;
+        }
+        
+        .display {
+            background: linear-gradient(145deg, #6c757d, #5a6268);
+            color: white;
+        }
+        
+        /* Modal Dark Theme */
+        .modal-content {
+            background-color: #1e1e1e;
+            color: #f8f9fa;
+            border: 1px solid #333;
+        }
+        
+        .modal-header {
+            border-bottom: 1px solid #333;
+        }
+        
+        .modal-footer {
+            border-top: 1px solid #333;
+        }
+        
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
         }
         
         /* Mobile-specific styles */
@@ -217,18 +258,7 @@
     {% block head %}{% endblock %}
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <div class="col-12 page-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">{% block header_title %}YouTube Karaoke{% endblock %}</h4>
-                    <a href="/settings" class="btn btn-outline-secondary btn-sm" title="Settings">
-                        <i class="fas fa-cog"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
-        
+    <div class="container-fluid pt-3">
         {% block content %}{% endblock %}
     </div>
     
@@ -320,15 +350,24 @@
         });
         
         socket.on('singers_update', function(data) {
-            updateSingersList(data.singers);
+            // Only call updateSingersList if it exists (for desktop version)
+            if (typeof updateSingersList === 'function') {
+                updateSingersList(data.singers);
+            }
         });
         
         socket.on('queue_update', function(data) {
-            updateQueueList(data.queue);
+            // Only call updateQueueList if it exists (for desktop version)
+            if (typeof updateQueueList === 'function') {
+                updateQueueList(data.queue);
+            }
         });
         
         socket.on('current_song_update', function(data) {
-            updateCurrentSong(data.current_song);
+            // Only call updateCurrentSong if it exists
+            if (typeof updateCurrentSong === 'function') {
+                updateCurrentSong(data.current_song);
+            }
         });
         
         // Display selection functionality
@@ -478,12 +517,12 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.singers && data.singers.length > 0) {
-                        container.innerHTML = '<div class="list-group">';
+                        container.innerHTML = '<div class="list-group singer-list">';
                         
                         data.singers.forEach(singer => {
                             container.innerHTML += `
-                                <button type="button" class="list-group-item list-group-item-action singer-select-item" onclick="addToQueue('${singer}')">
-                                    ${singer}
+                                <button type="button" class="list-group-item list-group-item-action singer-select-item mb-2 rounded" onclick="addToQueue('${singer}')">
+                                    <i class="fas fa-user me-2"></i>${singer}
                                 </button>
                             `;
                         });
@@ -537,15 +576,16 @@
                     
                     // Show toast notification
                     const toast = document.createElement('div');
-                    toast.className = 'position-fixed bottom-0 end-0 p-3';
+                    toast.className = 'position-fixed bottom-0 start-50 translate-middle-x p-3';
                     toast.style.zIndex = '11';
                     toast.innerHTML = `
-                        <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
-                            <div class="toast-header">
+                        <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true" style="background-color: #2a2a2a; border: 1px solid #444;">
+                            <div class="toast-header" style="background-color: #333; color: #f8f9fa; border-bottom: 1px solid #444;">
+                                <i class="fas fa-music me-2"></i>
                                 <strong class="me-auto">Song Added</strong>
-                                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
                             </div>
-                            <div class="toast-body">
+                            <div class="toast-body" style="color: #f8f9fa;">
                                 "${title}" added to queue for ${singer}
                             </div>
                         </div>
